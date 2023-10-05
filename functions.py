@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from datetime import datetime
 import xmltodict
+import xml.etree.ElementTree as ET
 
 from config import *
 
@@ -34,6 +35,17 @@ def merge_by_timestamp(arr):
 def sort_by_timestamp(arr):
     return sorted(arr, key=lambda x: x['timestamp'])
 
+
+def remove_redundant(data):
+    seen = set()
+    result = []
+
+    for entry in data:
+        if entry['timestamp'] not in seen:
+            seen.add(entry['timestamp'])
+            result.append(entry)
+
+    return result
 
 def load_xml():
     big_list = []
@@ -86,21 +98,42 @@ def load_esl():
         # read each file
         with open(os.path.join(os.getcwd(), esl_files, item)) as file:
             xml_string = file.read()
-            data_dict = xmltodict.parse(xml_string)
+            # Parse the XML string
+            root = ET.fromstring(xml_string)
 
-            Meter = data_dict['ESLBillingData']['Meter']
-            if isinstance(Meter, list):
-                for itemMeter in Meter:
-                    if isinstance(itemMeter['TimePeriod'], list):
-                        for i in itemMeter:
-                            print(i)
-                    else:
-                        print(itemMeter['TimePeriod'])
+            for time_period in root.findall(".//TimePeriod"):
+                timestamp = time_period.get("end")
+                valueBezug = next(
+                    (row.get("value") for row in time_period.findall(".//ValueRow") if row.get("obis") == "1-1:1.8.1"),
+                    None)
+                valueBezugNieder = next(
+                    (row.get("value") for row in time_period.findall(".//ValueRow") if row.get("obis") == "1-1:1.8.2"),
+                    None)
+                valueEinspesung = next(
+                    (row.get("value") for row in time_period.findall(".//ValueRow") if row.get("obis") == "1-1:2.8.1"),
+                    None)
+                valueEinspesungNieder = next(
+                    (row.get("value") for row in time_period.findall(".//ValueRow") if row.get("obis") == "1-1:2.8.2"),
+                    None)
+                if not isinstance(valueEinspesung, str):
+                    valueEinspesung = 0
 
-            else:
-                if isinstance(Meter['TimePeriod'], list):
-                    for i in Meter:
-                        print(i)
-                else:
-                    print(Meter['TimePeriod'])
+                if not isinstance(valueBezug, str):
+                    valueBezug = 0
+
+                if not isinstance(valueEinspesungNieder, str):
+                    valueEinspesungNieder = 0
+
+                if not isinstance(valueBezugNieder, str):
+                    valueBezugNieder = 0
+
+                if isinstance(valueEinspesung, str) or isinstance(valueBezug, str):
+                    print(float(valueBezug))
+                    big_list.append({
+                        "timestamp": timestamp,
+                        "valueBezug": float(valueBezug) + float(valueBezugNieder),
+                        "valueEinspesung": float(valueEinspesung) + float(valueEinspesungNieder)
+                    })
+
+            # return [row.get('value') for row in value_rows]
     return big_list

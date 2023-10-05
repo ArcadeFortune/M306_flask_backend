@@ -21,7 +21,8 @@ def xml():
 def esl():
     print('recieved API call')
     big_list = load_esl()
-    # print(big_list)
+    big_list = sort_by_timestamp(big_list)
+    big_list = remove_redundant(big_list)
     print('sending data')
     return big_list
     #
